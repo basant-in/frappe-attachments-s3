@@ -212,6 +212,10 @@ def file_upload_to_s3(doc, method):
     s3_upload = S3Operations()
     path = doc.file_url
     site_path = frappe.utils.get_site_path()
+    # Folder cannot be uploaded to cloud. Ignore the folder
+    if doc.is_folder:
+        return
+
     if doc.doctype == "File" and not doc.attached_to_doctype:
         parent_doctype = doc.doctype
         parent_name = doc.name
@@ -299,11 +303,15 @@ def upload_existing_files_s3(name, file_name):
             file_path = site_path + '/public' + path
         else:
             file_path = site_path + path
-        key,filename = s3_upload.upload_files_to_s3_with_key(
-            file_path, doc.file_name,
-            doc.is_private, parent_doctype,
-            parent_name
-        )
+        if os.path.isfile(file_path):
+            key,filename = s3_upload.upload_files_to_s3_with_key(
+                file_path, doc.file_name,
+                doc.is_private, parent_doctype,
+                parent_name
+            )
+        else:
+            doc.delete()
+            return
 
         if doc.is_private:
             method = "frappe_s3_attachment.controller.generate_file"
