@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 import frappe
 
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 old_get_hooks = frappe.get_hooks
 

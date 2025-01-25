@@ -245,8 +245,8 @@ def file_upload_to_s3(doc, method):
                 key
             )
         frappe.db.sql("""UPDATE `tabFile` SET file_url=%s, folder=%s,
-            old_parent=%s, content_hash=%s WHERE name=%s""", (
-            file_url, 'Home/Attachments', 'Home/Attachments', key, doc.name))
+            old_parent=%s, content_hash=%s, uploaded_to_cloud=1 WHERE name=%s""", (
+            file_url, 'Home/Attachments', doc.folder, key, doc.name))
 
         # From this PR, this code is unuseful
         # https://github.com/zerodha/frappe-attachments-s3/pull/39
@@ -309,7 +309,10 @@ def upload_existing_files_s3(name, file_name):
                 doc.is_private, parent_doctype,
                 parent_name
             )
+        elif doc.uploaded_to_cloud or doc.uploaded_to_dropbox or doc.uploaded_to_google_drive:
+            return
         else:
+            # If file is missing on the local drive and not uploaded to cloud, then delete it
             doc.delete()
             return
 
@@ -324,9 +327,10 @@ def upload_existing_files_s3(name, file_name):
                 key
             )
         os.remove(file_path)
+        # Add Uploaded to Cloud as true; Set the right folder path from AWS
         doc = frappe.db.sql("""UPDATE `tabFile` SET file_url=%s, folder=%s,
-            old_parent=%s, content_hash=%s WHERE name=%s""", (
-            file_url, 'Home/Attachments', 'Home/Attachments', key, doc.name))
+            old_parent=%s, content_hash=%s, uploaded_to_cloud=1 WHERE name=%s""", (
+            file_url, 'Home/Attachments', doc.folder, key, doc.name))
         frappe.db.commit()
     else:
         pass

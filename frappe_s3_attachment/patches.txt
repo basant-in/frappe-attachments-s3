@@ -1,0 +1,1 @@
+frappe_s3_attachment.patches.v0_1.add_custom_field_uploaded_to_cloud #add customer field for indicator
