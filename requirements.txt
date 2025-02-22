@@ -1,4 +1,4 @@
 boto3>=1.28.85
 libmagic==1.0
-urllib3==1.26.4
+urllib3>=1.26.4
 python-magic==0.4.27
