@@ -110,12 +110,8 @@ class S3Operations(object):
         Strips the file extension to set the content_type in metadata.
         """
         mime_type = magic.from_file(file_path, mime=True)
-        # frappe.msgprint(file_name)
-        # frappe.msgprint("File Name Before")
         file_name = file_name.encode('ascii', 'replace')
         file_name = file_name.decode("utf-8")
-        # frappe.msgprint(file_name)
-        # frappe.msgprint("File Name After")
         key = self.key_generator(file_name, parent_doctype, parent_name)
         content_type = mime_type
         try:
@@ -146,6 +142,54 @@ class S3Operations(object):
         except boto3.exceptions.S3UploadFailedError:
             frappe.throw(frappe._("File Upload Failed. Please try again."))
         return key,file_name
+
+    def copy_files_in_s3_with_key(
+        self, destination_file_name, source_key, is_private, parent_doctype, parent_name
+    ):
+        """
+                Copies a file within S3.
+                Strips the file extension to set the content_type in metadata.
+                """
+        destination_key = self.key_generator(destination_file_name, parent_doctype, parent_name)
+        # content_type = mime_type
+        try:
+            # Get metadata and content type of the original file
+            response = self.S3_CLIENT.head_object(Bucket=self.BUCKET, Key=source_key)
+            content_type = response.get("ContentType", "application/octet-stream")
+            metadata = response.get("Metadata", {})
+
+            copy_source = {
+                "Bucket": self.BUCKET,
+                "Key": source_key
+            }
+
+            # Build ExtraArgs for copy
+            extra_args = {
+                "ContentType": content_type,
+                "Metadata": metadata,
+                "MetadataDirective": "REPLACE"  # Necessary to apply new metadata
+            }
+
+            # Set ACL explicitly (ignore original file's ACL)
+            if not is_private:
+                extra_args["ACL"] = "public-read"
+
+            self.S3_CLIENT.copy_object(
+                CopySource=copy_source,
+                Bucket=self.BUCKET,
+                Key=destination_key,
+                **extra_args
+            )
+        except self.S3_CLIENT.exceptions.NoSuchKey:
+            frappe.throw(frappe._("Original file does not exist on S3."))
+        except ClientError as e:
+            frappe.log_error(frappe.get_traceback(), "S3 Copy Failed")
+            frappe.throw(frappe._("Failed to copy file in S3. Please try again."))
+        except Exception as e:
+            frappe.log_error(frappe.get_traceback(), "Unexpected S3 Error")
+            frappe.throw(frappe._("Unexpected error occurred while copying file in S3."))
+
+        return destination_key, destination_file_name
 
     def delete_from_s3(self, key):
         """Delete file from s3"""
@@ -228,12 +272,18 @@ def file_upload_to_s3(doc, method):
             file_path = site_path + '/public' + path
         else:
             file_path = site_path + path
-        key,filename = s3_upload.upload_files_to_s3_with_key(
-            file_path, doc.file_name,
-            doc.is_private, parent_doctype,
-            parent_name
-        )
-
+        if not doc.uploaded_to_cloud:
+            key,filename = s3_upload.upload_files_to_s3_with_key(
+                file_path, doc.file_name,
+                doc.is_private, parent_doctype,
+                parent_name
+            )
+        else:
+            key, filename = s3_upload.copy_files_in_s3_with_key(
+                doc.file_name, doc.content_hash,
+                doc.is_private, parent_doctype,
+                parent_name
+            )
         if doc.is_private:
             method = "frappe_s3_attachment.controller.generate_file"
             site_base_url = frappe.local.conf.site_base_url if frappe.local.conf.site_base_url else ""
@@ -256,7 +306,8 @@ def file_upload_to_s3(doc, method):
 
         frappe.db.commit()
         doc.reload()
-        os.remove(file_path)
+        # remove the file from local drive only if the original file (in case of copy) is not in the cloud
+        os.remove(file_path) if not doc.uploaded_to_cloud else None
 
 
 @frappe.whitelist()
