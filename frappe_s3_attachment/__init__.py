@@ -6,7 +6,7 @@ import frappe
 from frappe.model.document import Document
 from frappe_s3_attachment.monkey_patches.document import s3Attachment_copy_attachments_from_amended_from
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 old_get_hooks = frappe.get_hooks
 
