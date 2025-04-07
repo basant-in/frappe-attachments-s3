@@ -1,6 +1,9 @@
 # Copyright (c) 2025, Basant Choudhary. and Contributors
 # MIT License. See license.txt
 
+import os
+
+import frappe
 from frappe.utils import cint
 
 # override set_is_private from frappe.core.doctype.file.file
